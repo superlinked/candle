@@ -87,6 +87,7 @@ mod tensor_cat;
 pub mod test_utils;
 pub mod utils;
 mod variable;
+mod zip_utils;
 
 #[cfg(feature = "cudnn")]
 pub use cuda_backend::cudnn;

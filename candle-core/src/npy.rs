@@ -285,11 +285,11 @@ impl Tensor {
         let zip_reader = BufReader::new(File::open(path.as_ref())?);
         let mut zip = zip::ZipArchive::new(zip_reader)?;
         let mut result = vec![];
-        for i in 0..zip.len() {
+        for i in crate::zip_utils::decoded_indices(&zip)? {
             let mut reader = zip.by_index(i)?;
             let name = {
-                let name = reader.name();
-                name.strip_suffix(NPY_SUFFIX).unwrap_or(name).to_owned()
+                let name = reader.name()?;
+                name.strip_suffix(NPY_SUFFIX).unwrap_or(&name).to_owned()
             };
             let header = read_header(&mut reader)?;
             let header = Header::parse(&header)?;
@@ -308,13 +308,17 @@ impl Tensor {
         let mut zip = zip::ZipArchive::new(zip_reader)?;
         let mut result = vec![];
         for name in names.iter() {
-            let mut reader = match zip.by_name(&format!("{name}{NPY_SUFFIX}")) {
-                Ok(reader) => reader,
-                Err(_) => Err(Error::Npy(format!(
-                    "no array for {name} in {:?}",
-                    path.as_ref()
-                )))?,
-            };
+            let mut reader =
+                match crate::zip_utils::index_for_name(&zip, &format!("{name}{NPY_SUFFIX}"))
+                    .and_then(|index| zip.by_index(index))
+                {
+                    Ok(reader) => reader,
+                    Err(zip::result::ZipError::FileNotFound) => Err(Error::Npy(format!(
+                        "no array for {name} in {:?}",
+                        path.as_ref()
+                    )))?,
+                    Err(error) => return Err(error.into()),
+                };
             let header = read_header(&mut reader)?;
             let header = Header::parse(&header)?;
             if header.fortran_order {
@@ -382,11 +386,11 @@ impl NpzTensors {
         let zip_reader = BufReader::new(File::open(&path)?);
         let mut zip = zip::ZipArchive::new(zip_reader)?;
         let mut index_per_name = HashMap::new();
-        for i in 0..zip.len() {
+        for i in crate::zip_utils::decoded_indices(&zip)? {
             let file = zip.by_index(i)?;
             let name = {
-                let name = file.name();
-                name.strip_suffix(NPY_SUFFIX).unwrap_or(name).to_owned()
+                let name = file.name()?;
+                name.strip_suffix(NPY_SUFFIX).unwrap_or(&name).to_owned()
             };
             index_per_name.insert(name, i);
         }
