@@ -1,0 +1,35 @@
+name: ZIP 9 maintenance compatibility
+
+on:
+  pull_request:
+    branches: [maintenance/0.10.2]
+  push:
+    branches: [maintenance/0.10.2]
+
+permissions:
+  contents: read
+
+jobs:
+  cpu:
+    name: CPU (Rust ${{ matrix.rust }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: ["1.88.0", "1.98.1"]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          toolchain: ${{ matrix.rust }}
+      - name: Resolve dependencies
+        run: cargo generate-lockfile
+      - name: Core CPU suite and archive regressions
+        run: cargo test --locked -p candle-core
+      - name: Archive regressions with deflate
+        env:
+          CANDLE_TEST_EXPECT_DEFLATE: "1"
+        run: cargo test --locked -p candle-core --test zip_compatibility --features zip/deflate
