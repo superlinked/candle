@@ -675,18 +675,17 @@ pub fn read_pth_tensor_info<P: AsRef<std::path::Path>>(
     let file = std::fs::File::open(file)?;
     let zip_reader = std::io::BufReader::new(file);
     let mut zip = zip::ZipArchive::new(zip_reader)?;
-    let zip_file_names = zip
-        .file_names()
-        .map(|f| f.to_string())
-        .collect::<Vec<String>>();
+    let metadata = zip.metadata();
 
     let mut tensor_infos = vec![];
-    for file_name in zip_file_names.iter() {
+    for index in crate::zip_utils::decoded_indices(&zip)? {
+        let entry = metadata.entry(index)?;
+        let file_name = entry.name()?;
         if !file_name.ends_with("data.pkl") {
             continue;
         }
         let dir_name = std::path::PathBuf::from(file_name.strip_suffix(".pkl").context("no .pkl")?);
-        let reader = zip.by_name(file_name)?;
+        let reader = zip.by_index(index)?;
         let mut reader = std::io::BufReader::new(reader);
         let mut stack = Stack::empty();
         stack.read_loop(&mut reader)?;
@@ -771,7 +770,8 @@ impl PthTensors {
         // We hope that the file has not changed since first reading it.
         let zip_reader = std::io::BufReader::new(std::fs::File::open(&self.path)?);
         let mut zip = zip::ZipArchive::new(zip_reader)?;
-        let mut reader = zip.by_name(&tensor_info.path)?;
+        let index = crate::zip_utils::index_for_name(&zip, &tensor_info.path)?;
+        let mut reader = zip.by_index(index)?;
         let is_fortran_contiguous = tensor_info.layout.is_fortran_contiguous();
         let rank = tensor_info.layout.shape().rank();
 
